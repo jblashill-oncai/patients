@@ -54,7 +54,7 @@ export class PatientService {
 
   async update(id: string, attributes: Partial<Omit<Patient, "id">>) {
     await latency();
-    const patient = this.getById(id);
+    const patient = await this.getById(id);
     assign(patient, attributes);
     this.persist();
     return patient;

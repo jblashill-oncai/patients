@@ -2,17 +2,27 @@ import React, { useCallback } from 'react';
 import { patientService } from "../ApiService";
 import { Patient } from "../Patient";
 import { useEffect, useState } from "react";
-import { create } from 'lodash';
-import { CreatePatientModal } from './CreateModal';
+import { PatientModal } from './PatientModal';
+import _ from 'lodash';
 
 type TPatientListItemProps = {
   patient: Patient;
+  onUpdateClick?: (patient: Patient) => void;
+  onDeleteClick?: (patient: Patient) => void;
 };
 
 export const PatientListItem = (props: TPatientListItemProps) => {
-  const { patient } = props;
+  const { patient, onUpdateClick: propsOnUpdateClick, onDeleteClick: propsOnDeleteClick } = props;
 
-  return <li>{patient.id} - {patient.name}</li>;
+  const onUpdateClick = useCallback(() => {
+    if (propsOnUpdateClick) propsOnUpdateClick(patient);
+  }, [patient, propsOnUpdateClick]);
+  
+  const onDeleteClick = useCallback(() => {
+    if (propsOnDeleteClick) propsOnDeleteClick(patient);
+  }, [propsOnDeleteClick]);
+
+  return <li className='patientListItem'><p>{patient.id} - {patient.name}</p><button onClick={onUpdateClick}>Update Patient</button><button onClick={onDeleteClick}>Delete Patient</button></li>;
 }
 
 export const List = () => {
@@ -20,8 +30,10 @@ export const List = () => {
   const [error, setError] = useState<any>();
 
   const [addLoading, setAddLoading] = useState<boolean>();
+  const [updateLoading, setUpdateLoading] = useState<boolean>();
 
-  const [createModalPageOpen, setCreateModalPageOpen] = useState<boolean>(false);
+  const [patientBeingEdited, setPatientBeingEdited] = useState<Patient>();
+  const [patientFormOpen, setPatientFormOpen] = useState<boolean>(false);
 
   useEffect(() => {
     setError(undefined);
@@ -32,11 +44,62 @@ export const List = () => {
 
   const addPatient = useCallback((params: Patient) => {
     setAddLoading(true);
-    patientService.create(params)
-      // .then((newPatient) => setPatients((currentPatients) => [...(currentPatients || []), newPatient]))
+    return patientService.create(params)
+      .then(() => setPatients((currentPatients) => [...(currentPatients || [])]))
       .catch((error) => setError(error))
       .then(() => setAddLoading(false));
   }, []);
+
+  const updatePatient = useCallback((params: Patient) => {
+    if (params.id) {
+      setUpdateLoading(true);
+      return patientService.update(params.id, _.omit(params, 'id'))
+        .then(() => setPatients((patients) => {
+          if (patients) {
+            const ind = patients?.findIndex((p) => p.id === params.id);
+            patients[ind] = params;
+          }
+          return _.cloneDeep(patients);
+        }))
+        .catch((error) => setError(error))
+        .then(() => setAddLoading(false));
+    }
+  }, []);
+
+  const onUpdateClick = useCallback((patient: Patient) => {
+    setPatientBeingEdited(patient);
+    setPatientFormOpen(true);
+  }, []);
+
+  const onCreateClick = useCallback(() => {
+    setPatientBeingEdited(undefined);
+    setPatientFormOpen(true);
+  }, []);
+
+  const onDeleteClick = useCallback((patient: Patient) => {
+    if (patient.id) {
+      patientService.delete(patient.id).then(() => {
+        setPatients((patients) => {
+          if (patients) {
+            const ind = patients.findIndex((p) => p.id === patient.id);
+            patients.splice(ind, 1);
+          }
+
+          return _.cloneDeep(patients);
+        })
+      })
+    }
+  }, []);
+
+  const onSubmit = useCallback(async (data: Patient) => {
+    if (patientBeingEdited != null) {
+      await updatePatient(data);
+    } else {
+      await addPatient(data);
+    }
+
+    setPatientFormOpen(false);
+  }, [patientBeingEdited, addPatient, updatePatient]);
 
   if (patients == null && !error) {
     return (<p>Loading...</p>)
@@ -49,18 +112,22 @@ export const List = () => {
   return (
     <div>
       {
-        createModalPageOpen && (
-          <CreatePatientModal
-            addPatient={addPatient}
-            onClose={() => setCreateModalPageOpen(false)}
+        patientFormOpen && (
+          <PatientModal
+            onSubmit={onSubmit}
+            onClose={() => {
+              setPatientFormOpen(false)
+              setPatientBeingEdited(undefined);
+            }}
+            patient={patientBeingEdited}
           />
         )
       }
-      <button onClick={() => setCreateModalPageOpen(true)}>Create Patient</button>
+      <button onClick={onCreateClick}>Create Patient</button>
       <ul>
         {
           patients?.map((patient) => {
-            return <PatientListItem key={patient.id} patient={patient} />;
+            return <PatientListItem key={patient.id} patient={patient} onUpdateClick={onUpdateClick} onDeleteClick={onDeleteClick} />;
           })
         }
       </ul>

@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from "react";
+import React, { useCallback, useMemo, useState } from "react";
 
 type TSelectProps<T extends String> = {
   name: string;
@@ -7,10 +7,11 @@ type TSelectProps<T extends String> = {
     label: string;
     value: T;
   }[];
+  value?: T;
 }
 
 export const Select = <T extends string>(props: TSelectProps<T>) => {
-  const { name, onChange: propsOnChange, options } = props;
+  const { name, onChange: propsOnChange, options, value: propsValue } = props;
   const [value, setValue] = useState<T>();
 
   const onChange = useCallback<React.ChangeEventHandler<HTMLSelectElement>>((e) => {
@@ -19,12 +20,20 @@ export const Select = <T extends string>(props: TSelectProps<T>) => {
     setValue(v as T);
 
     if (propsOnChange) propsOnChange(v as T);
-  }, []);
+  }, [propsOnChange]);
+
+  const refValue = useMemo(() => {
+    // CONTROLLED
+    if (propsValue != null) return propsValue;
+
+    // UNCONTROLLED
+    return value;
+  }, [propsValue, value]);
 
   return (
     <div>
       <label htmlFor='histology'>{name}:</label>
-      <select id='histology' name='histology' onChange={onChange}>
+      <select id='histology' name='histology' onChange={onChange} value={refValue}>
         <option value={undefined}></option>
         {
           options.map((opt) => (
